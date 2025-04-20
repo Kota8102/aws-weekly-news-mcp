@@ -14,10 +14,14 @@ dependencies = [
     "readabilipy>=0.2.0",
     "ruff>=0.11.6",
     "python-dateutil>=2.9.0.post0",
+    "pytest>=8.3.5",
+    "pytest-mock>=3.12.0",     # モック用
+    "pytest-asyncio>=0.23.0",  # 非同期テスト用 (server.py のテストで必要になる可能性)
+    "requests-mock>=1.11.0",   # requests のモック用
 ]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -35,6 +39,7 @@ ignore = [
     "TD003", # missing todo link
     "PD011", # pandas use of dot values
     "DTZ007", # timezone-naive datetime created
+    "BLE001", # black formatting
 ]
 unfixable = [
     "F401", # unused import

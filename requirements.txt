@@ -5,3 +5,5 @@ requests>=2.32.3
 beautifulsoup4>=4.13.4
 markdownify>=0.11.6
 readabilipy>=0.2.0 
+pytest>=8.0.0
+pytest-mock>=3.12.0

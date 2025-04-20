@@ -10,8 +10,9 @@ class WeeklyAWSJpUpdate(BaseModel):
     summary: str | None
 
 
-class WeeklyAWSJpDetailedUpdate(WeeklyAWSJpUpdate):
-    content: str | None = None
-    author: str | None = None
-    tags: list[str] = []
-    published_date: datetime | None = None
+class WeeklyAWSJpDetailedUpdate(BaseModel):
+    title: str
+    url: AnyUrl
+    published: datetime
+    summary: str | None
+    content: str | None

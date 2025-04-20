@@ -5,12 +5,12 @@ import sys
 from loguru import logger
 from mcp.server.fastmcp import Context, FastMCP
 
+# models と util から必要なものをインポート
 from models import WeeklyAWSJpDetailedUpdate, WeeklyAWSJpUpdate
 from util import (
-    fetch_latest_jp_entry,
-    fetch_latest_jp_entry_with_details,
-    fetch_url_content,
-    fetch_weekly_jp_entries,
+    get_latest_generative_ai_details,  # 変更
+    get_latest_weekly_aws_details,  # 変更
+    get_recent_entries,
 )
 
 # ロギング設定
@@ -30,6 +30,9 @@ mcp = FastMCP(
         "pydantic",
         "feedparser",
         "loguru",
+        "requests",
+        "readabilipy",
+        "markdownify",
     ],
 )
 
@@ -40,63 +43,112 @@ async def get_weekly_jp_updates(
     days: int = 7,
     limit: int = 10,
 ) -> list[WeeklyAWSJpUpdate]:
-    """過去 `days` 日以内の「週刊AWS」記事を最大 `limit` 件取得。"""
-    # 非同期ログ呼び出しを info レベルで行う
-    await ctx.info(f"Fetching JP weekly AWS entries for the past {days} days")
-    raw = fetch_weekly_jp_entries(days=days, limit=limit)
-    return [WeeklyAWSJpUpdate(**item) for item in raw]
+    """指定された日数内の「週刊AWS」日本語版ブログ記事のリストを取得します。
 
+    ## Usage
+    このツールは、AWS Japan Blog の RSS フィードから、指定された日数 (`days`) 以内に公開された
+    「週刊AWS」タグの記事を取得し、最大 `limit` 件までのリストを返します。
 
-@mcp.tool()
-async def get_latest_jp_update(ctx: Context) -> WeeklyAWSJpUpdate | None:
-    """「週刊AWS」最新記事を 1 件だけ取得。"""
-    # 非同期ログ呼び出しを info レベルで行う
-    await ctx.info("Fetching latest JP weekly AWS entry")
-    raw = fetch_latest_jp_entry()
-    if not raw:
-        # エントリがない場合は warning レベルでログ
-        await ctx.warning("No entries found in the JP weekly AWS feed")
-        return None
-    return WeeklyAWSJpUpdate(**raw)
+    ## When to Use
+    - 特定期間内の週刊AWSの更新情報をまとめて確認したい場合。
+    - 最新の数件だけでなく、少し前の週刊AWS記事も参照したい場合。
 
+    ## Result Interpretation
+    戻り値は `WeeklyAWSJpUpdate` モデルのリストです。各要素には以下の情報が含まれます:
+    - `title`: 記事のタイトル
+    - `url`: 記事のURL
+    - `published`: 記事の公開日時 (UTC)
+    - `summary`: 記事の要約 (利用可能な場合)
 
-@mcp.tool()
-async def get_latest_jp_update_with_details(ctx: Context) -> WeeklyAWSJpDetailedUpdate | None:
-    """「週刊AWS」最新記事を1件取得し、記事ページから詳細情報も含めて返す。"""
-    await ctx.info("Fetching latest JP weekly AWS entry with details")
-    raw = fetch_latest_jp_entry_with_details()
-    if not raw:
-        await ctx.warning("No entries found in the JP weekly AWS feed")
-        return None
-    return WeeklyAWSJpDetailedUpdate(**raw)
-
-
-@mcp.tool()
-async def get_latest_jp_update_content(ctx: Context) -> dict | None:
-    """最新の「週刊AWS」記事のURLを取得し、そのコンテンツを返す。
+    Args:
+        ctx: MCP コンテキスト
+        days: 何日前までの記事を取得するか (デフォルト: 7)
+        limit: 最大取得件数 (デフォルト: 10)
 
     Returns:
-        dict: {
-            'entry': WeeklyAWSJpUpdate - 記事のメタデータ
-            'content': str - 記事のコンテンツ(Markdown形式)
-        }
+        WeeklyAWSJpUpdate モデルのリスト
 
     """
-    await ctx.info("最新の週刊AWS記事とそのコンテンツを取得")
+    await ctx.info(f"過去 {days} 日分の週刊AWS記事を取得します (最大 {limit} 件)")
+    entries = get_recent_entries(days=days, limit=limit)
+    await ctx.info(f"{len(entries)} 件の記事が見つかりました。")
+    return entries
 
-    # 最新の記事を取得
-    entry = fetch_latest_jp_entry()
+
+@mcp.tool()
+async def get_latest_jp_update_details(ctx: Context) -> WeeklyAWSJpDetailedUpdate | None:  # 名前と戻り値の型を変更
+    """「週刊AWS」日本語版ブログの最新記事の詳細(本文コンテンツ含む)を1件取得します。
+
+    ## Usage
+    このツールは、AWS Japan Blog の RSS フィードから、「週刊AWS」タグが付いた最新の記事のメタデータと、
+    本文コンテンツを取得します。(「週刊生成AI with AWS」の記事は除外されます)
+
+    ## When to Use
+    - 最新の週刊AWS記事のメタデータと本文コンテンツを一度に取得したい場合。
+    - 記事のメタデータと整形された本文の両方が必要な場合。
+
+    ## Result Interpretation
+    戻り値は `WeeklyAWSJpDetailedUpdate` モデル、または記事が見つからない場合は `None` です。
+    モデルには以下の情報が含まれます:
+    - `title`: 記事のタイトル
+    - `url`: 記事のURL
+    - `published`: 記事の公開日時 (UTC)
+    - `summary`: 記事の要約 (利用可能な場合)
+    - `content`: 記事本文のコンテンツ (取得できない場合は None になる可能性あり)
+
+    Args:
+        ctx: MCP コンテキスト
+
+    Returns:
+        WeeklyAWSJpDetailedUpdate モデル、または None
+
+    """
+    await ctx.info("最新の「週刊AWS」記事の詳細を取得します")
+    entry = get_latest_weekly_aws_details()  # 呼び出す関数を変更
     if not entry:
-        await ctx.warning("週刊AWSフィードにエントリがありません")
+        await ctx.warning("最新の「週刊AWS」記事が見つかりませんでした")
         return None
+    await ctx.info(f"最新記事の詳細が見つかりました: {entry.title}")
+    return entry
 
-    # URLからコンテンツを取得
-    content = fetch_url_content(entry["url"])
 
-    return {
-        "entry": WeeklyAWSJpUpdate(**entry),
-        "content": content,
-    }
+@mcp.tool()
+async def get_latest_generative_ai_jp_update_details(
+    ctx: Context,
+) -> WeeklyAWSJpDetailedUpdate | None:  # 名前と戻り値の型を変更
+    """「週刊生成AI with AWS」日本語版ブログの最新記事の詳細(本文コンテンツ含む)を1件取得します。
+
+    ## Usage
+    このツールは、AWS Japan Blog の RSS フィードから、「週刊生成AI with AWS」を含む最新の記事のメタデータと、
+    本文コンテンツを取得します。
+
+    ## When to Use
+    - 最新の「週刊生成AI with AWS」記事のメタデータと本文コンテンツを一度に取得したい場合。
+    - 記事のメタデータと整形された本文の両方が必要な場合。
+
+    ## Result Interpretation
+    戻り値は `WeeklyAWSJpDetailedUpdate` モデル、または記事が見つからない場合は `None` です。
+    モデルには以下の情報が含まれます:
+    - `title`: 記事のタイトル
+    - `url`: 記事のURL
+    - `published`: 記事の公開日時 (UTC)
+    - `summary`: 記事の要約 (利用可能な場合)
+    - `content`: 記事本文のコンテンツ (取得できない場合は None になる可能性あり)
+
+    Args:
+        ctx: MCP コンテキスト
+
+    Returns:
+        WeeklyAWSJpDetailedUpdate モデル、または None
+
+    """
+    await ctx.info("最新の「週刊生成AI with AWS」記事の詳細を取得します")
+    entry = get_latest_generative_ai_details()  # 呼び出す関数を変更
+    if not entry:
+        await ctx.warning("最新の「週刊生成AI with AWS」記事が見つかりませんでした")
+        return None
+    await ctx.info(f"最新記事の詳細が見つかりました: {entry.title}")
+    return entry
 
 
 def main() -> None:
