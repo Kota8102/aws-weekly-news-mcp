@@ -5,15 +5,14 @@ import sys
 from loguru import logger
 from mcp.server.fastmcp import Context, FastMCP
 
-# models と util から必要なものをインポート
 from models import WeeklyAWSJpDetailedUpdate, WeeklyAWSJpUpdate
 from util import (
-    get_latest_generative_ai_details,  # 変更
-    get_latest_weekly_aws_details,  # 変更
+    get_latest_generative_ai_details,
+    get_latest_weekly_aws_details,
     get_recent_entries,
 )
 
-# ロギング設定
+# ログ
 logger.remove()
 logger.add(sys.stderr, level=os.getenv("FASTMCP_LOG_LEVEL", "INFO"))
 
